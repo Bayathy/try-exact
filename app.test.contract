@@ -1,7 +1,73 @@
-test "the greeting loads"
-  expect tree has "root"
-  expect text "greeting" == "Hello from Exact Todo."
+test "two tasks are added and counted"
+  expect tree has "empty"
+  type "draft" "Milk"
+  tap "add"
+  clock data
+  expect text "title-1" == "Milk"
+  expect text "left" == "1 item left"
+  type "draft" "Bread"
+  tap "add"
+  clock data
+  expect text "title-2" == "Bread"
+  expect text "left" == "2 items left"
+  expect text "draft" == ""
+  expect tree missing "empty"
 
-test "the header's button likes it"
-  tap "like"
-  expect state liked == true
+test "blank input is never added"
+  type "draft" "   "
+  expect disabled "add"
+  expect tree has "empty"
+  expect state tasks == []
+
+test "checking a task updates the count and survives reload"
+  type "draft" "Milk"
+  tap "add"
+  clock data
+  type "draft" "Bread"
+  tap "add"
+  clock data
+  tap "done-1"
+  clock data
+  expect text "left" == "1 item left"
+  reload
+  expect state tasks.0 .done == true
+  expect text "left" == "1 item left"
+
+test "deleting tasks updates the count and restores the empty state"
+  type "draft" "Milk"
+  tap "add"
+  clock data
+  type "draft" "Bread"
+  tap "add"
+  clock data
+  tap "delete-1"
+  clock data
+  expect tree missing "task-1"
+  expect text "left" == "1 item left"
+  tap "delete-2"
+  clock data
+  expect tree has "empty"
+  expect tree missing "left"
+  type "draft" "Eggs"
+  tap "add"
+  clock data
+  expect text "title-3" == "Eggs"
+
+test "enter adds the task"
+  type "draft" "Milk"
+  type "draft" key "Enter"
+  clock data
+  expect text "title-1" == "Milk"
+  expect text "draft" == ""
+
+test "all done shows zero left and unchecking brings it back"
+  type "draft" "Milk"
+  tap "add"
+  clock data
+  tap "done-1"
+  clock data
+  expect text "left" == "0 items left"
+  tap "done-1"
+  clock data
+  expect state tasks.0 .done == false
+  expect text "left" == "1 item left"

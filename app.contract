@@ -1,24 +1,73 @@
-// Exact Todo: the view. app.ts answers what it asks for. Colours, fonts,
-// sizes and the safe area are left unsaid, so each platform supplies its own:
-// the header is the navigation bar, its heading the title, its button a bar item.
-shape Greeting
-  text: string
-
 routes nav
   home "/"
 
-component ExactTodo
-  resource greeting = greeting("Exact Todo") as shape Greeting
-  state liked = false
-  action like
-    liked = not liked
+shape Task
+  id: string
+  title: string
+  done: bool
+
+shape Reply
+  ok: bool
+  error: string
+
+fn leftText(n: number): string = `${n} ${n == 1 ? "item" : "items"} left`
+
+component ToDo
+  state draft = ""
+  state sent = ""
+  resource tasks = loadTasks() as shape Task[] else empty()
+  mutation added as shape Reply refreshes tasks then afterAdd
+  mutation changed as shape Reply queue refreshes tasks
+  derive left = tasks.filter(t => not t.done).length
+  derive addSucceeded = match added { case some(r) => r.ok, case none => false }
+
+  action edit(value: string)
+    draft = value
+  action add
+    if draft.trim() != "" and not pending(added)
+      sent = draft.trim()
+      send added = addTask(draft.trim())
+  action afterAdd
+    if addSucceeded and draft.trim() == sent
+      draft = ""
+  action toggle(id: string, done: bool)
+    send changed = setDone(id, done)
+  action remove(id: string)
+    send changed = removeTask(id)
+  action follow(url: string)
+    nav = go(nav, url)
+
   view
-    main testId="root" navigationKey=`${top(nav).id}` navigationBack="back" width="100%" height="100%"
+    main testId="root" navigationKey=`${top(nav).id}` navigate=follow width="100%" height="100%"
       for e in stack(nav) key=e.id
-        column navigationKey=`${e.id}` navigationScroll="content" position="absolute" inset=0 display="flex" flex-direction="column"
-          header display="flex" align-items="center"
-            text "Exact Todo" role="heading" aria-level=1 flex=1
-            button press=like aria-label=(liked ? "Unlike" : "Like") testId="like"
-              image (liked ? "symbol:heart-fill" : "symbol:heart")
-          scroll id="content" flex=1 min-height=0 padding=16
-            text greeting.text testId="greeting"
+        if e.name == "home"
+          column navigationKey=`${e.id}` navigationScroll="items" position="absolute" inset=0
+            header
+              h1 "ToDo"
+            list id="items" appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
+              section
+                row gap=8 align-items="center"
+                  column flex=1 min-width=0 gap=4
+                    input value=draft input=edit submit=add placeholder="New task" aria-label="New task" testId="draft"
+                    if failed(added) and not pending(added)
+                      text "Couldn't add the task." font="-exact-footnote" color="-exact-system-red" testId="add-error"
+                  button press=add disabled=(draft.trim() == "" or pending(added)) buttonStyle="filled" testId="add"
+                    text "Add"
+              if failed(tasks) and tasks.length == 0
+                section
+                  row
+                    text "Couldn't load tasks." testId="load-error"
+              else if tasks.length == 0
+                section
+                  row
+                    text "Nothing to do." testId="empty"
+              else
+                section
+                  for t in tasks key=t.id
+                    row delete=remove(t.id) gap=8 align-items="center" testId=`task-${t.id}`
+                      input type="checkbox" checked=t.done change=toggle(t.id) aria-label=t.title testId=`done-${t.id}`
+                      text t.title flex=1 min-width=0 testId=`title-${t.id}`
+                      button press=remove(t.id) destructive=true aria-label=`Delete ${t.title}` testId=`delete-${t.id}`
+                        image "symbol:delete"
+                  footer
+                    text leftText(left) testId="left"

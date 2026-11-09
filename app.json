@@ -1,20 +1,28 @@
 {
   "$schema": "../try-exact/scripts/app.schema.json",
-  "name": "Exact Todo",
-  "short_name": "Exact Todo",
-  "id": "com.example.exact-todo-d5ba48",
+  "name": "ToDo",
+  "short_name": "ToDo",
+  "id": "com.bayathy.exacttodo",
   "start_url": "/",
   "display": "standalone",
   "app": {
-    "id": "com.example.exact-todo-d5ba48",
-    "name": "Exact Todo"
+    "id": "com.bayathy.exacttodo",
+    "name": "ToDo"
   },
   "host": {
-    "web": {}
+    "web": {},
+    "ios": {
+      "minimumOS": "17.0",
+      "deviceFamily": [
+        "iphone",
+        "ipad"
+      ]
+    }
   },
   "deploy": {
     "store": {
-      "web": "0"
+      "web": "0",
+      "ios": "0"
     }
   }
 }
