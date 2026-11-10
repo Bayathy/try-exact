@@ -1,0 +1,29 @@
+tamber brand
+
+theme
+  board.page = light-dark(#f2f5f1, #101713)
+  board.lane = light-dark(#e5ece4, #1a2820)
+  board.card = light-dark(#ffffff, #24372b)
+  board.ink = light-dark(#17291e, #eef8ee)
+  board.muted = light-dark(#536b59, #aac0ae)
+  board.shadow = light-dark(#203d2733, #00000066)
+  board.chip-ink = light-dark(#14301d, #ecf8ef)
+  priority.high = light-dark(#a32e2b, #ff9088)
+  priority.medium = light-dark(#a56a13, #f6bf68)
+  priority.low = light-dark(#28714c, #86cfa3)
+  category.work = light-dark(#c8e9d3, #315f46)
+  category.home = light-dark(#f3dfba, #6b4e27)
+  category.personal = light-dark(#dce1f8, #424d80)
+  glass.base = light-dark(#bcdbe3, #0a1f32)
+  glass.start = light-dark(#9bc7d5, #10283c)
+  glass.end = light-dark(#d6d6eb, #224b5a)
+  glass.card = light-dark(#ffffffaa, #08283e66)
+  glass.edge = light-dark(#ffffffcc, #b6d9ed55)
+  glass.ink = light-dark(#103344, #effbff)
+  stats.page = light-dark(#f6f5f0, #171a1b)
+  stats.card = light-dark(#ffffff, #282e2d)
+  terminal.page = #07130c  scheme=fixed
+  terminal.panel = #0d1d12  scheme=fixed
+  terminal.line = #286840  scheme=fixed
+  terminal.ink = #a1efad  scheme=fixed
+  terminal.dim = #72ae80  scheme=fixed

@@ -1,73 +1,264 @@
+use RingProgress, SummaryCard, StatBar from "exact:content"
+
 routes nav
-  home "/"
+  tab list "/"
+  tab board "/board"
+  tab glass "/glass"
+  tab stats "/stats"
+  tab terminal "/terminal"
 
 shape Task
   id: string
   title: string
   done: bool
+  priority: string
+  category: string
 
 shape Reply
   ok: bool
   error: string
 
 fn leftText(n: number): string = `${n} ${n == 1 ? "item" : "items"} left`
+fn priorityName(p: string): string = p == "high" ? "High" : p == "medium" ? "Medium" : "Low"
+fn categoryName(c: string): string = c == "work" ? "Work" : c == "home" ? "Home" : "Personal"
+fn priorityColor(p: string): string = p == "high" ? "priority.high" : p == "medium" ? "priority.medium" : "priority.low"
+fn categoryColor(c: string): string = c == "work" ? "category.work" : c == "home" ? "category.home" : "category.personal"
+fn priorityIcon(p: string): string = p == "high" ? "symbol:alert" : p == "medium" ? "symbol:bookmark" : "symbol:circle"
+fn filterName(f: string): string = f == "active" ? "Active" : f == "done" ? "Done" : "All"
+fn ratio(part: number, whole: number): number = whole == 0 ? 0 : part / whole
 
 component ToDo
   state draft = ""
   state sent = ""
+  state priority = "medium"
+  state category = "personal"
+  state filter = "all"
   resource tasks = loadTasks() as shape Task[] else empty()
   mutation added as shape Reply refreshes tasks then afterAdd
   mutation changed as shape Reply queue refreshes tasks
   derive left = tasks.filter(t => not t.done).length
+  derive doneCount = tasks.filter(t => t.done).length
   derive addSucceeded = match added { case some(r) => r.ok, case none => false }
+  derive visible = tasks.filter(t => filter == "all" or (filter == "active" and not t.done) or (filter == "done" and t.done))
 
   action edit(value: string)
     draft = value
+  action choosePriority(value: string)
+    priority = value
+  action chooseCategory(value: string)
+    category = value
+  action chooseFilter(value: string)
+    filter = value
   action add
     if draft.trim() != "" and not pending(added)
       sent = draft.trim()
-      send added = addTask(draft.trim())
+      send added = addTask(draft.trim(), priority, category)
   action afterAdd
     if addSucceeded and draft.trim() == sent
       draft = ""
   action toggle(id: string, done: bool)
-    send changed = setDone(id, done)
+    send changed = toggleDone(id)
+  action toggleTerminal(id: string)
+    send changed = toggleDone(id)
   action remove(id: string)
     send changed = removeTask(id)
+  action advancePriority(id: string)
+    send changed = cyclePriority(id)
+  action clearCompleted
+    send changed = clearDone()
+  action pick(name: string)
+    nav = select(nav, name)
   action follow(url: string)
     nav = go(nav, url)
 
   view
-    main testId="root" navigationKey=`${top(nav).id}` navigate=follow width="100%" height="100%"
-      for e in stack(nav) key=e.id
-        if e.name == "home"
-          column navigationKey=`${e.id}` navigationScroll="items" position="absolute" inset=0
-            header
-              h1 "ToDo"
-            list id="items" appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
-              section
-                row gap=8 align-items="center"
-                  column flex=1 min-width=0 gap=4
-                    input value=draft input=edit submit=add placeholder="New task" aria-label="New task" testId="draft"
-                    if failed(added) and not pending(added)
-                      text "Couldn't add the task." font="-exact-footnote" color="-exact-system-red" testId="add-error"
-                  button press=add disabled=(draft.trim() == "" or pending(added)) buttonStyle="filled" testId="add"
-                    text "Add"
-              if failed(tasks) and tasks.length == 0
-                section
-                  row
-                    text "Couldn't load tasks." testId="load-error"
-              else if tasks.length == 0
-                section
-                  row
-                    text "Nothing to do." testId="empty"
-              else
-                section
-                  for t in tasks key=t.id
-                    row delete=remove(t.id) gap=8 align-items="center" testId=`task-${t.id}`
-                      input type="checkbox" checked=t.done change=toggle(t.id) aria-label=t.title testId=`done-${t.id}`
-                      text t.title flex=1 min-width=0 testId=`title-${t.id}`
-                      button press=remove(t.id) destructive=true aria-label=`Delete ${t.title}` testId=`delete-${t.id}`
-                        image "symbol:delete"
-                  footer
-                    text leftText(left) testId="left"
+    main testId="root" navigationKey=`${top(nav).id}` navigate=follow width="100%" height="100%" display="flex" flex-direction="column"
+      column flex=1 min-height=0 position="relative"
+        for tab in nav.tabs key=tab.name
+          column role="tabpanel" id=`panel-${tab.name}` position="absolute" inset=0
+            for e in tab.stack key=e.id
+              if e.name == "list"
+                column navigationKey=`${e.id}` navigationScroll="items" position="absolute" inset=0
+                  header
+                    h1 "ToDo"
+                  list id="items" appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
+                    section
+                      row gap=8 align-items="center"
+                        column flex=1 min-width=0 gap=4
+                          input value=draft input=edit submit=add placeholder="New task" aria-label="New task" testId="draft"
+                          if failed(added) and not pending(added)
+                            text "Couldn't add the task." font="-exact-footnote" color="-exact-system-red" testId="add-error"
+                          if failed(changed) and not pending(changed)
+                            text "Couldn't update tasks." font="-exact-footnote" color="-exact-system-red" testId="changed-error"
+                        button press=add disabled=(draft.trim() == "" or pending(added)) buttonStyle="filled" testId="add"
+                          text "Add"
+                      row role="radiogroup" aria-label="Priority" gap=4 flex-wrap="wrap"
+                        for p in ["high", "medium", "low"] key=p
+                          button role="radio" aria-checked=(priority == p) press=choosePriority(p) testId=`priority-${p}` flex="1 1 5rem" min-width=0
+                            text priorityName(p)
+                      row
+                        text "Category"
+                        select value=category change=chooseCategory aria-label="Category" testId="category"
+                          option "Work" value="work"
+                          option "Home" value="home"
+                          option "Personal" value="personal"
+                    section
+                      row role="radiogroup" aria-label="Filter" gap=4 flex-wrap="wrap"
+                        for f in ["all", "active", "done"] key=f
+                          button role="radio" aria-checked=(filter == f) press=chooseFilter(f) testId=`filter-${f}` flex="1 1 5rem" min-width=0
+                            text filterName(f)
+                    if pending(tasks) and tasks.length == 0
+                      section
+                        row
+                          progress aria-label="Loading tasks" testId="list-loading"
+                    if failed(tasks)
+                      section
+                        row
+                          text "Couldn't load tasks." testId="load-error"
+                    if tasks.length == 0 and not pending(tasks) and not failed(tasks)
+                      section
+                        row
+                          text "Nothing to do." testId="empty"
+                    if tasks.length > 0
+                      section
+                        if visible.length == 0
+                          row
+                            text "No tasks here." testId="filter-empty"
+                        else
+                          for t in visible key=t.id
+                            row delete=remove(t.id) gap=8 align-items="center" testId=`task-${t.id}`
+                              input type="checkbox" checked=t.done change=toggle(t.id) aria-label=t.title testId=`done-${t.id}`
+                              image priorityIcon(t.priority) aria-hidden=true
+                              text t.title flex=1 min-width=0 testId=`title-${t.id}`
+                              button press=remove(t.id) destructive=true aria-label=`Delete ${t.title}` testId=`delete-${t.id}`
+                                image "symbol:delete"
+                        footer
+                          text leftText(left) testId="left"
+                      section
+                        row
+                          button commandfor="clear-confirm" command="show-modal" destructive=true disabled=(doneCount == 0) testId="clear-done"
+                            text "Clear completed"
+              if e.name == "board"
+                column navigationKey=`${e.id}` navigationScroll="board-scroll" position="absolute" inset=0
+                  header
+                    h1 "Board"
+                  scroll id="board-scroll" flex=1 min-height=0 background-color="board.page"
+                    if pending(tasks) and tasks.length == 0
+                      progress aria-label="Loading tasks" testId="board-loading"
+                    if failed(tasks)
+                      text "Couldn't load tasks." padding=20 testId="board-load-error"
+                    if tasks.length == 0 and not pending(tasks) and not failed(tasks)
+                      text "Nothing to do." padding=20 testId="board-empty"
+                    if tasks.length > 0
+                      column padding=20 gap=4
+                        text "By priority" font="-exact-title1" color="board.ink"
+                        text `${tasks.length} ${tasks.length == 1 ? "task" : "tasks"}` color="board.muted"
+                      row flex-wrap="wrap" align-items="flex-start" gap=16 padding=16
+                        for p in ["high", "medium", "low"] key=p
+                          column flex="1 1 12rem" min-width=0 gap=12 padding=16 border-radius=20 background-color="board.lane" testId=`board-column-${p}`
+                            row align-items="center" gap=8 flex-wrap="wrap"
+                              image priorityIcon(p) color=priorityColor(p) aria-hidden=true
+                              text priorityName(p) role="heading" aria-level=2 font="-exact-headline" color="board.ink"
+                              text `${tasks.filter(t => t.priority == p).length}` color="board.muted" testId=`board-count-${p}`
+                            for t in tasks.filter(x => x.priority == p) key=t.id
+                              column padding=16 gap=12 border-radius=16 background-color="board.card" box-shadow="0 8px 24px board.shadow" testId=`board-card-${t.id}`
+                                row gap=8 align-items="center" flex-wrap="wrap"
+                                  image (t.done ? "symbol:checkmark" : "symbol:circle") color="board.ink" aria-hidden=true
+                                  text t.title font="-exact-headline" color="board.ink" flex="1 1 8rem" min-width=0 testId=`board-title-${t.id}`
+                                row align-items="center" justify-content="space-between" gap=8 flex-wrap="wrap"
+                                  text categoryName(t.category) padding="4px 10px" border-radius=999 background-color=categoryColor(t.category) color="board.chip-ink" testId=`board-category-${t.id}`
+                                  button press=advancePriority(t.id) aria-label=`Change priority for ${t.title}` testId=`board-priority-${t.id}`
+                                    image "symbol:forward-chevron"
+
+              if e.name == "glass"
+                column navigationKey=`${e.id}` navigationScroll="glass-scroll" position="absolute" inset=0
+                  header
+                    h1 "Glass"
+                  scroll id="glass-scroll" flex=1 min-height=0 background-color="glass.base" background-image="linear-gradient(145deg, glass.start, glass.end)"
+                    if pending(tasks) and tasks.length == 0
+                      progress aria-label="Loading tasks" testId="glass-loading"
+                    if failed(tasks)
+                      text "Couldn't load tasks." padding=24 color="glass.ink" testId="glass-load-error"
+                    if tasks.length == 0 and not pending(tasks) and not failed(tasks)
+                      text "Nothing to do." padding=24 color="glass.ink" testId="glass-empty"
+                    if tasks.length > 0
+                      column padding=24 gap=20
+                        text `${doneCount} of ${tasks.length} complete` font="-exact-title3" color="glass.ink"
+                        for c in ["work", "home", "personal"] key=c
+                          column padding=20 gap=12 border-radius=24 background-color="glass.card" backdrop-filter="blur(24px) saturate(1.5)" border-width=1 border-style="solid" border-color="glass.edge" testId=`glass-group-${c}`
+                            row justify-content="space-between" align-items="center" flex-wrap="wrap"
+                              text categoryName(c) role="heading" aria-level=2 font="-exact-title2" font-weight=700 color="glass.ink"
+                              text `${tasks.filter(t => t.category == c and t.done).length}/${tasks.filter(t => t.category == c).length}` color="glass.ink" testId=`glass-count-${c}`
+                            progress value=tasks.filter(t => t.category == c and t.done).length max=max(1, tasks.filter(t => t.category == c).length) aria-label=`${categoryName(c)} completion`
+                            for t in tasks.filter(x => x.category == c) key=t.id
+                              row gap=8 align-items="center" flex-wrap="wrap"
+                                image (t.done ? "symbol:checkmark" : "symbol:circle") color="glass.ink" aria-hidden=true
+                                text t.title color="glass.ink" flex="1 1 8rem" min-width=0
+              if e.name == "stats"
+                column navigationKey=`${e.id}` navigationScroll="stats-scroll" position="absolute" inset=0
+                  header
+                    h1 "Stats"
+                  scroll id="stats-scroll" flex=1 min-height=0 background-color="stats.page"
+                    if pending(tasks) and tasks.length == 0
+                      progress aria-label="Loading tasks" testId="stats-loading"
+                    if failed(tasks)
+                      text "Couldn't load tasks." padding=24 testId="stats-load-error"
+                    if tasks.length > 0 or (not pending(tasks) and not failed(tasks))
+                      column padding=24 gap=24 max-width="60rem" margin-left="auto" margin-right="auto" min-width=0
+                        text `${doneCount} of ${tasks.length} complete` font="-exact-title2" testId="stats-overall-count"
+                        row flex-wrap="wrap" gap=16
+                          column flex="1 1 12rem" min-width=0 testId="stats-overall"
+                            RingProgress(label="Completed", value=`${round(ratio(doneCount, tasks.length) * 100)}%`, fraction=ratio(doneCount, tasks.length), tint=none)
+                          column flex="1 1 12rem" min-width=0
+                            SummaryCard(label="Remaining", value=`${left}`, detail="", progress=some(ratio(left, tasks.length)), symbol=none)
+                        column gap=14
+                          text "By category" role="heading" aria-level=2 font="-exact-title2"
+                          for c in ["work", "home", "personal"] key=c
+                            column testId=`stats-category-${c}`
+                              StatBar(label=categoryName(c), value=`${tasks.filter(t => t.category == c and t.done).length} / ${tasks.filter(t => t.category == c).length}`, fraction=ratio(tasks.filter(t => t.category == c and t.done).length, tasks.filter(t => t.category == c).length), tint=none)
+                        column gap=12
+                          text "By priority" role="heading" aria-level=2 font="-exact-title2"
+                          for p in ["high", "medium", "low"] key=p
+                            row justify-content="space-between" flex-wrap="wrap" gap=8 padding=14 border-radius=12 background-color="stats.card"
+                              text priorityName(p) flex="1 1 8rem" min-width=0
+                              text `${tasks.filter(t => t.priority == p).length}` testId=`stats-priority-${p}`
+              if e.name == "terminal"
+                column navigationKey=`${e.id}` navigationScroll="terminal-scroll" position="absolute" inset=0 color-scheme="dark" background-color="terminal.page" color="terminal.ink"
+                  header
+                    h1 "Terminal"
+                  scroll id="terminal-scroll" flex=1 min-height=0
+                    if pending(tasks) and tasks.length == 0
+                      progress aria-label="Loading tasks" testId="terminal-loading"
+                    if failed(tasks)
+                      text "Couldn't load tasks." padding=20 testId="terminal-load-error"
+                    if tasks.length == 0 and not pending(tasks) and not failed(tasks)
+                      text "Nothing to do." padding=20 testId="terminal-empty"
+                    if tasks.length > 0
+                      column padding=20 gap=12 font-family="monospace"
+                        text `${left} active  /  ${doneCount} complete` color="terminal.dim"
+                        column padding=16 gap=4 border-radius=12 border-width=1 border-style="solid" border-color="terminal.line" background-color="terminal.panel"
+                          for t in tasks key=t.id
+                            button press=toggleTerminal(t.id) testId=`terminal-task-${t.id}` text-align="start" color="terminal.ink" font-family="monospace" padding="9px 4px"
+                              text `${t.done ? "[x]" : "[ ]"} ${t.id}  ${t.title}  !${t.priority} #${t.category}`
+      row role="tablist" testId="tabs" overflow-x="auto" flex-wrap="nowrap" flex-shrink=0
+        button role="tab" aria-controls="panel-list" aria-selected=(nav.tab == "list") press=pick("list") testId="tab-list" flex="1 0 4rem"
+          image "symbol:list"
+          text "List"
+        button role="tab" aria-controls="panel-board" aria-selected=(nav.tab == "board") press=pick("board") testId="tab-board" flex="1 0 4rem"
+          image "symbol:layers"
+          text "Board"
+        button role="tab" aria-controls="panel-glass" aria-selected=(nav.tab == "glass") press=pick("glass") testId="tab-glass" flex="1 0 4rem"
+          image "symbol:sparkles"
+          text "Glass"
+        button role="tab" aria-controls="panel-stats" aria-selected=(nav.tab == "stats") press=pick("stats") testId="tab-stats" flex="1 0 4rem"
+          image "symbol:chart"
+          text "Stats"
+        button role="tab" aria-controls="panel-terminal" aria-selected=(nav.tab == "terminal") press=pick("terminal") testId="tab-terminal" flex="1 0 4rem"
+          image "symbol:document"
+          text "Terminal"
+      dialog id="clear-confirm" role="alertdialog" aria-label="Clear completed tasks?"
+        text `${doneCount} completed ${doneCount == 1 ? "task" : "tasks"} will be removed.`
+        button press=clearCompleted destructive=true commandfor="clear-confirm" command="close" testId="confirm-clear"
+          text "Clear"
+        button commandfor="clear-confirm" command="close" testId="cancel-clear"
+          text "Cancel"

@@ -1,4 +1,5 @@
 test "two tasks are added and counted"
+  clock data
   expect tree has "empty"
   type "draft" "Milk"
   tap "add"
@@ -14,8 +15,11 @@ test "two tasks are added and counted"
   expect tree missing "empty"
 
 test "blank input is never added"
+  clock data
   type "draft" "   "
   expect disabled "add"
+  type "draft" key "Enter"
+  clock data
   expect tree has "empty"
   expect state tasks == []
 
@@ -71,3 +75,172 @@ test "all done shows zero left and unchecking brings it back"
   clock data
   expect state tasks.0 .done == false
   expect text "left" == "1 item left"
+
+test "priority and category carry into Board and Stats"
+  tap "priority-high"
+  type "category" "work"
+  type "draft" "Plan release"
+  tap "add"
+  clock data
+  expect state tasks.0 .priority == "high"
+  expect state tasks.0 .category == "work"
+  tap "tab-board"
+  expect tree has "board-column-high"
+  expect tree has "board-card-1"
+  expect text "board-count-high" == "1"
+  expect text "board-category-1" == "Work"
+  tap "tab-stats"
+  expect text "stats-priority-high" == "1"
+  expect text "stats-category-work" == "Work0 / 1"
+
+test "Active and Done filters show the matching rows"
+  type "draft" "Milk"
+  tap "add"
+  clock data
+  type "draft" "Bread"
+  tap "add"
+  clock data
+  tap "done-1"
+  clock data
+  tap "filter-active"
+  expect tree missing "task-1"
+  expect tree has "task-2"
+  tap "filter-done"
+  expect tree has "task-1"
+  expect tree missing "task-2"
+  expect text "left" == "1 item left"
+
+test "clear completed waits for confirmation"
+  type "draft" "Milk"
+  tap "add"
+  clock data
+  type "draft" "Bread"
+  tap "add"
+  clock data
+  tap "done-1"
+  clock data
+  tap "clear-done"
+  tap "cancel-clear"
+  clock data
+  clock settle
+  expect tree has "task-1"
+  tap "clear-done"
+  tap "confirm-clear"
+  clock data
+  expect tree missing "task-1"
+  expect tree has "task-2"
+  expect text "left" == "1 item left"
+
+test "Board priority button moves a task to the next lane"
+  tap "priority-high"
+  type "draft" "Plan release"
+  tap "add"
+  clock data
+  tap "tab-board"
+  expect text "board-count-high" == "1"
+  tap "board-priority-1"
+  clock data
+  expect state tasks.0 .priority == "medium"
+  expect text "board-count-high" == "0"
+  expect text "board-count-medium" == "1"
+  expect tree has "board-card-1"
+
+test "Terminal toggle updates List count"
+  type "draft" "Milk"
+  tap "add"
+  clock data
+  tap "tab-terminal"
+  tap "terminal-task-1"
+  clock data
+  tap "tab-list"
+  expect text "left" == "0 items left"
+  expect state tasks.0 .done == true
+  tap "tab-terminal"
+  tap "terminal-task-1"
+  clock data
+  tap "tab-list"
+  expect text "left" == "1 item left"
+  expect state tasks.0 .done == false
+
+test "Board low priority cycles back to high"
+  tap "priority-low"
+  type "draft" "Plan release"
+  tap "add"
+  clock data
+  tap "tab-board"
+  expect text "board-count-low" == "1"
+  tap "board-priority-1"
+  clock data
+  expect state tasks.0 .priority == "high"
+  expect text "board-count-low" == "0"
+  expect text "board-count-high" == "1"
+
+test "filter says when there are no matching tasks"
+  type "draft" "Milk"
+  tap "add"
+  clock data
+  tap "filter-done"
+  expect text "filter-empty" == "No tasks here."
+  expect tree missing "task-1"
+  tap "filter-all"
+  expect tree missing "filter-empty"
+  expect tree has "task-1"
+
+test "Stats overall count updates after a toggle"
+  type "draft" "Milk"
+  tap "add"
+  clock data
+  tap "tab-stats"
+  expect text "stats-overall-count" == "0 of 1 complete"
+  tap "tab-list"
+  tap "done-1"
+  clock data
+  tap "tab-stats"
+  expect text "stats-overall-count" == "1 of 1 complete"
+
+test "two Terminal taps return to the original state"
+  type "draft" "Milk"
+  tap "add"
+  clock data
+  tap "tab-terminal"
+  tap "terminal-task-1"
+  tap "terminal-task-1"
+  clock data
+  expect state tasks.0 .done == false
+  tap "tab-list"
+  expect text "left" == "1 item left"
+
+test "two Board taps advance twice"
+  tap "priority-high"
+  type "draft" "Milk"
+  tap "add"
+  clock data
+  tap "tab-board"
+  tap "board-priority-1"
+  tap "board-priority-1"
+  clock data
+  expect state tasks.0 .priority == "low"
+  expect text "board-count-low" == "1"
+
+test "empty Board Glass and Terminal show their own empty states"
+  clock data
+  tap "tab-board"
+  expect text "board-empty" == "Nothing to do."
+  tap "tab-glass"
+  expect text "glass-empty" == "Nothing to do."
+  tap "tab-terminal"
+  expect text "terminal-empty" == "Nothing to do."
+
+test "Glass counts completed tasks by category"
+  type "category" "work"
+  type "draft" "Plan release"
+  tap "add"
+  clock data
+  type "draft" "Review release"
+  tap "add"
+  clock data
+  tap "done-1"
+  clock data
+  tap "tab-glass"
+  expect text "glass-count-work" == "1/2"
+  expect text "glass-count-home" == "0/0"
